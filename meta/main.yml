@@ -69,7 +69,7 @@ meta:
 
   # The role's author(s)
   # Optional
-   author: Ted Kent
+  author: Ted Kent
 
   # The role's supported platforms
   # Optional
