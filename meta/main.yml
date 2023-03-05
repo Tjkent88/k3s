@@ -1,0 +1,87 @@
+galaxy_info:
+  author: Ted Kent
+  description: Role to install and configure K3s on Debian Bullseye and Raspberry Pi
+  galaxy_tags: []
+  license: MIT
+  min_ansible_version: 2.10
+  platforms:
+    - name: Debian
+      versions:
+        - bullseye
+    - name: Raspberry Pi OS
+      versions:
+        - bullseye
+  version: 0.1.0
+
+dependencies:
+  # Add any role dependencies here
+
+# Provides default variables for the role
+# See https://docs.ansible.com/ansible/latest/user_guide/playbooks_reuse_roles.html#role-default-variables
+# for more information about using default variables
+defaults:
+  k3s_version: "latest"
+
+# Variables that can be overridden by the user
+# See https://docs.ansible.com/ansible/latest/user_guide/playbooks_reuse_roles.html#role-variables
+# for more information about using role variables
+vars:
+  k3s_master_node: "{{ 'kube-managers' in group_names }}"
+  k3s_worker_node: "{{ 'kube-workers' in group_names }}"
+
+# Specify any external role dependencies here
+# See https://docs.ansible.com/ansible/latest/user_guide/playbooks_reuse_roles.html#role-dependencies
+# for more information about using external dependencies
+# dependencies:
+#   - { role: username.rolename, var1: 'value1' }
+
+# Role metadata
+# See https://docs.ansible.com/ansible/latest/reference_appendices/galaxy.html#role-yaml-metadata
+# for more information about role metadata
+meta:
+  # Name of the role
+  # Required
+  name: k3s
+
+  # A brief description of the role
+  # Optional
+  description: Role to install k3s on manager and worker nodes
+
+  # The role's license
+  # Optional
+  license: MIT
+
+  # The role's version
+  # Optional
+  version: 0.1.0
+
+  # The URL of the role's homepage
+  # Optional
+  # home: https://example.com/role-homepage
+
+  # The role's issue tracker URL
+  # Optional
+  # issue_tracker: https://example.com/role-issues
+
+  # The role's GitHub repository
+  # Optional
+  # github_repo: https://github.com/username/rolename
+
+  # The role's author(s)
+  # Optional
+   author: Ted Kent
+
+  # The role's supported platforms
+  # Optional
+  platforms:
+    - name: Debian
+      versions:
+        - bullseye
+    - name: Raspberry Pi OS
+      versions:
+        - bullseye
+
+  # The role's dependencies
+  # Optional
+  # dependencies:
+  #   - { role: username.rolename, var1: 'value1' }
