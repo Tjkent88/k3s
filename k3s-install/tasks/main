@@ -1,0 +1,144 @@
+- name: Setup cgroup correctly
+  ansible.builtin.lineinfile:
+    path: /boot/cmdline.txt
+    regexp: "^console=serial0,115200"
+    line: "console=serial0,115200 console=tty1 root={{ ansible_cmdline.root }} rootfstype=ext4 fsck.repair=yes rootwait cgroup_memory=1 cgroup_enable=memory"
+    state: present
+  register: groupcorrection
+
+- name: Reboot server to register change
+  ansible.builtin.reboot:
+  when: groupcorrection.changed
+
+- name: Install apt packages
+  ansible.builtin.apt:
+    name:
+      - snap
+      - pip
+      - docker-compose
+      - docker
+      - apt-transport-https
+    state: present
+    update_cache: true
+
+- name: Install pyyaml though pip
+  ansible.builtin.pip:
+    name:
+      - pyyaml
+
+- name: Check if kubectl is installed
+  ansible.builtin.stat:
+    path: /snap/bin/kubectl
+  register: kubectl_installed
+
+- name: Install k3s on master node
+  when:
+    - "'kube-managers' in group_names"
+    - not kubectl_installed.stat.exists
+  block:
+    - name: Install k3s server
+      ansible.builtin.script:
+        script: https://get.k3s.io
+        executable: sh
+
+    - name: Edit k3s config file to actual master ip
+      ansible.builtin.lineinfile:
+        path: /etc/rancher/k3s/k3s.yaml
+        regexp: "{{ item.regex }}"
+        line: "{{ item.line }}"
+        state: present
+      with_items:
+        - regex: "server: https://127.0.0.1:6443"
+          line: "    server: https://{{ hostvars['kube-manager'].ansible_default_ipv4.address }}:6443"
+        - regex: "- name: default"
+          line: "- name: {{ ansible_user }}"
+        - regex: "  name: default"
+          line: "  name: hertford"
+        - regex: "    cluster: default"
+          line: "    cluster: hertford"
+        - regex: "    user: default"
+          line: "    user: {{ ansible_user }}"
+
+    - name: Make sure .kube folder exists
+      ansible.builtin.file:
+        path: /home/{{ ansible_user }}/.kube
+        state: directory
+        mode: 0644
+
+    - name: Copy k3s yaml to kubeconfig
+      ansible.builtin.copy:
+        src: /etc/rancher/k3s/k3s.yaml
+        dest: /home/{{ ansible_user }}/.kube/config
+        remote_src: true
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+        mode: '0644'
+
+    - name: Add helm gpg key
+      ansible.builtin.get_url:
+        url: https://baltocdn.com/helm/signing.asc
+        dest: /tmp/helm.gpg
+        mode: 0644
+      register: helm_gpg_key
+
+    - name: Copy helm gpg key to keyring
+      ansible.builtin.copy:
+        src: /tmp/helm.gpg
+        dest: /usr/share/keyrings/helm.gpg
+        remote_src: true
+        mode: 0644
+      become: true
+      when: helm_gpg_key.changed
+
+    - name: Add helm apt repo
+      ansible.builtin.lineinfile:
+        path: /etc/apt/sources.list.d/helm-stable-debian.list
+        line: 'deb [arch={{ ansible_architecture }} signed-by=/usr/share/keyrings/helm.gpg] https://baltocdn.com/helm/stable/debian/ all main'
+        create: true
+        state: present
+        insertbefore: BOF
+        mode: 0644
+      become: true
+
+    - name: Update apt and install helm
+      ansible.builtin.package:
+        name: helm
+
+    - name: Helm repo add k8s-at-home https://k8s-at-home.com/charts/
+      kubernetes.core.helm_repository:
+        name: k8s-at-home
+        repo_url: https://k8s-at-home.com/charts/
+
+    - name: Install kubectl
+      community.general.snap:
+        name:
+          - kubectl
+
+    - name: Add /snap/bin to PATH
+      ansible.builtin.lineinfile:
+        path: /etc/environment
+        line: 'PATH="$PATH:/snap/bin"'
+        state: present
+        insertafter: '^PATH='
+        regexp: '^PATH='
+        validate: '/usr/bin/env bash -n /etc/environment'
+
+- name: Check if k3s is installed
+  ansible.builtin.stat:
+    path: /usr/local/bin/kubectl
+  register: k3s_installed
+
+- name: Get parent node token
+  ansible.builtin.command: sudo cat /var/lib/rancher/k3s/server/node-token
+  register: parenttoken
+  when: "'kube-managers' in group_names"
+  changed_when: false
+
+- name: Register child devices
+  ansible.builtin.script:
+    script: https://get.k3s.io
+    args: "K3S_URL=https://{{ hostvars[groups['kube-managers'].0].ansible_default_ipv4.address }}:6443 K3S_TOKEN={{ hostvars[groups['kube-managers'].0].parenttoken.stdout }}"
+    executable: sh
+  when:
+    - "'kube-workers' in group_names"
+    - not k3s_installed.stat.exists
