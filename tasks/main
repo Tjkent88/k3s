@@ -53,9 +53,9 @@
         - regex: "- name: default"
           line: "- name: {{ ansible_user }}"
         - regex: "  name: default"
-          line: "  name: hertford"
+          line: "  name: {{ cluster_name }}"
         - regex: "    cluster: default"
-          line: "    cluster: hertford"
+          line: "    cluster: h{{ cluster_name }}"
         - regex: "    user: default"
           line: "    user: {{ ansible_user }}"
 
